@@ -202,6 +202,7 @@ type compress struct {
 type msgHandoff struct {
 	msgType messageType
 	buf     []byte
+	reuse   func()
 	from    net.Addr
 }
 
@@ -349,7 +350,7 @@ func (m *Memberlist) packetListen() {
 	for {
 		select {
 		case packet := <-m.transport.PacketCh():
-			m.ingestPacket(packet.Buf, packet.From, packet.Timestamp)
+			m.ingestPacket(packet.Buf, packet.Reuse, packet.From, packet.Timestamp)
 
 		case <-m.shutdownCh:
 			return
@@ -357,7 +358,7 @@ func (m *Memberlist) packetListen() {
 	}
 }
 
-func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time) {
+func (m *Memberlist) ingestPacket(buf []byte, reuse func(), from net.Addr, timestamp time.Time) {
 	var (
 		packetLabel string
 		err         error
@@ -409,13 +410,13 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 			m.logger.Printf("[WARN] memberlist: Got invalid checksum for UDP packet: %x, %x", crc, expected)
 			return
 		}
-		m.handleCommand(buf[5:], from, timestamp)
+		m.handleCommand(buf[5:], reuse, from, timestamp)
 	} else {
-		m.handleCommand(buf, from, timestamp)
+		m.handleCommand(buf, reuse, from, timestamp)
 	}
 }
 
-func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Time) {
+func (m *Memberlist) handleCommand(buf []byte, reuse func(), from net.Addr, timestamp time.Time) {
 	if len(buf) < 1 {
 		m.logger.Printf("[ERR] memberlist: missing message type byte %s", LogAddress(from))
 		return
@@ -458,7 +459,7 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 		if queue.Len() >= m.config.HandoffQueueDepth {
 			m.logger.Printf("[WARN] memberlist: handler queue full, dropping message (%d) %s", msgType, LogAddress(from))
 		} else {
-			queue.PushBack(msgHandoff{msgType, buf, from})
+			queue.PushBack(msgHandoff{msgType, buf, reuse, from})
 		}
 		m.msgQueueLock.Unlock()
 
@@ -504,6 +505,7 @@ func (m *Memberlist) packetHandler() {
 				}
 				msgType := msg.msgType
 				buf := msg.buf
+				reuse := msg.reuse
 				from := msg.from
 
 				switch msgType {
@@ -514,7 +516,7 @@ func (m *Memberlist) packetHandler() {
 				case deadMsg:
 					m.handleDead(buf, from)
 				case userMsg:
-					m.handleUser(buf, from)
+					m.handleUser(buf, reuse, from)
 				default:
 					m.logger.Printf("[ERR] memberlist: Message type (%d) not supported %s (packet handler)", msgType, LogAddress(from))
 				}
@@ -541,7 +543,7 @@ func (m *Memberlist) handleCompound(buf []byte, from net.Addr, timestamp time.Ti
 
 	// Handle each message
 	for _, part := range parts {
-		m.handleCommand(part, from, timestamp)
+		m.handleCommand(part, nil, from, timestamp)
 	}
 }
 
@@ -748,10 +750,14 @@ func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
 }
 
 // handleUser is used to notify channels of incoming user data
-func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
+func (m *Memberlist) handleUser(buf []byte, reuse func(), from net.Addr) {
 	d := m.config.Delegate
 	if d != nil {
-		d.NotifyMsg(buf)
+		if ex, ok := d.(DelegateEx); ok {
+			ex.NotifyMsgEx(buf, reuse)
+		} else {
+			d.NotifyMsg(buf)
+		}
 	}
 }
 
@@ -765,7 +771,7 @@ func (m *Memberlist) handleCompressed(buf []byte, from net.Addr, timestamp time.
 	}
 
 	// Recursively handle the payload
-	m.handleCommand(payload, from, timestamp)
+	m.handleCommand(payload, nil, from, timestamp)
 }
 
 // encodeAndSendMsg is used to combine the encoding and sending steps
@@ -1310,7 +1316,11 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 
 		d := m.config.Delegate
 		if d != nil {
-			d.NotifyMsg(userBuf)
+			if ex, ok := d.(DelegateEx); ok {
+				ex.NotifyMsgEx(userBuf, nil)
+			} else {
+				d.NotifyMsg(userBuf)
+			}
 		}
 	}
 

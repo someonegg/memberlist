@@ -11,8 +11,7 @@ type Delegate interface {
 
 	// NotifyMsg is called when a user-data message is received.
 	// Care should be taken that this method does not block, since doing
-	// so would block the entire UDP packet receive loop. Additionally, the byte
-	// slice may be modified after the call returns, so it should be copied if needed
+	// so would block the entire UDP packet receive loop.
 	NotifyMsg([]byte)
 
 	// GetBroadcasts is called when user data messages can be broadcast.
@@ -34,4 +33,10 @@ type Delegate interface {
 	// remote side's LocalState call. The 'join'
 	// boolean indicates this is for a join instead of a push/pull.
 	MergeRemoteState(buf []byte, join bool)
+}
+
+type DelegateEx interface {
+	// NotifyMsgEx is an enhanced NotifyMsg, so NotifyMsg will be ignored.
+	// Func reuse can mark the internal buffer as reusable. It may be nil.
+	NotifyMsgEx(buf []byte, resue func())
 }

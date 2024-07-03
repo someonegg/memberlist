@@ -814,7 +814,7 @@ func TestIngestPacket_CRC(t *testing.T) {
 	logs := &bytes.Buffer{}
 	logger := log.New(logs, "", 0)
 	m.logger = logger
-	m.ingestPacket(in, udp.LocalAddr(), time.Now())
+	m.ingestPacket(in, nil, udp.LocalAddr(), time.Now())
 
 	if !strings.Contains(logs.String(), "invalid checksum") {
 		t.Fatalf("bad: %s", logs.String())
@@ -904,6 +904,6 @@ func TestHandleCommand(t *testing.T) {
 	m := Memberlist{
 		logger: log.New(&buf, "", 0),
 	}
-	m.handleCommand(nil, &net.TCPAddr{Port: 12345}, time.Now())
+	m.handleCommand(nil, nil, &net.TCPAddr{Port: 12345}, time.Now())
 	require.Contains(t, buf.String(), "missing message type byte")
 }

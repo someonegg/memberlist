@@ -12,6 +12,9 @@ type Packet struct {
 	// Buf has the raw contents of the packet.
 	Buf []byte
 
+	// Reuse will mark the packet buffer as reusable. It may be nil.
+	Reuse func()
+
 	// From has the address of the peer. This is an actual net.Addr so we
 	// can expose some concrete details about incoming packets.
 	From net.Addr

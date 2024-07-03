@@ -320,6 +320,12 @@ func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 	}
 }
 
+var udpPacketBufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, udpPacketBufSize)
+	},
+}
+
 // udpListen is a long running goroutine that accepts incoming UDP packets and
 // hands them off to the packet channel.
 func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
@@ -327,7 +333,7 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 	for {
 		// Do a blocking read into a fresh buffer. Grab a time stamp as
 		// close as possible to the I/O.
-		buf := make([]byte, udpPacketBufSize)
+		buf := udpPacketBufPool.Get().([]byte)
 		n, addr, err := udpLn.ReadFrom(buf)
 		ts := time.Now()
 		if err != nil {
@@ -351,6 +357,7 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 		metrics.IncrCounterWithLabels([]string{"memberlist", "udp", "received"}, float32(n), t.metricLabels)
 		t.packetCh <- &Packet{
 			Buf:       buf[:n],
+			Reuse:     func() { udpPacketBufPool.Put(buf[:udpPacketBufSize]) },
 			From:      addr,
 			Timestamp: ts,
 		}
