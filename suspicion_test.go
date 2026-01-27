@@ -1,3 +1,6 @@
+// Copyright IBM Corp. 2013, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -112,7 +115,7 @@ func TestSuspicion_Timer(t *testing.T) {
 				t.Errorf("case %d: bad %d != %d", i, numConfirmations, c.numConfirmations)
 			}
 
-			ch <- time.Now().Sub(start)
+			ch <- time.Since(start)
 		}
 
 		// Create the timer and add the requested confirmations. Wait

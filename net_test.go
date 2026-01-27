@@ -1,3 +1,6 @@
+// Copyright IBM Corp. 2013, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -13,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-msgpack/codec"
+	"github.com/hashicorp/go-msgpack/v2/codec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,10 +29,18 @@ func TestHandleCompoundPing(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udpAddr := udp.LocalAddr().(*net.UDPAddr)
 
@@ -40,7 +51,7 @@ func TestHandleCompoundPing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -95,10 +106,18 @@ func TestHandlePing(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udpAddr := udp.LocalAddr().(*net.UDPAddr)
 
@@ -109,7 +128,7 @@ func TestHandlePing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -159,10 +178,18 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udpAddr := udp.LocalAddr().(*net.UDPAddr)
 
@@ -174,7 +201,7 @@ func TestHandlePing_WrongNode(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -187,7 +214,7 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	}
 
 	// Wait for response
-	udp.SetDeadline(time.Now().Add(50 * time.Millisecond))
+	_ = udp.SetDeadline(time.Now().Add(50 * time.Millisecond))
 	in := make([]byte, 1500)
 	_, _, err = udp.ReadFrom(in)
 
@@ -201,10 +228,18 @@ func TestHandleIndirectPing(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udpAddr := udp.LocalAddr().(*net.UDPAddr)
 
@@ -218,7 +253,7 @@ func TestHandleIndirectPing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(indirectPingMsg, &ind)
+	buf, err := encode(indirectPingMsg, &ind, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -285,7 +320,11 @@ func TestTCPPing(t *testing.T) {
 	// Close() call here.
 
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	pingTimeout := m.config.ProbeInterval
 	pingTimeMax := m.config.ProbeInterval + 10*time.Millisecond
@@ -294,13 +333,15 @@ func TestTCPPing(t *testing.T) {
 	pingOut := ping{SeqNo: 23, Node: "mongo"}
 	pingErrCh := make(chan error, 1)
 	go func() {
-		tcp.SetDeadline(time.Now().Add(pingTimeMax))
+		_ = tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			_ = conn.Close()
+		}()
 
 		msgType, _, dec, err := m.readStream(conn, "")
 		if err != nil {
@@ -330,7 +371,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		ack := ackResp{pingIn.SeqNo, nil}
-		out, err := encode(ackRespMsg, &ack)
+		out, err := encode(ackRespMsg, &ack, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
 			return
@@ -357,13 +398,15 @@ func TestTCPPing(t *testing.T) {
 
 	// Make sure a mis-matched sequence number is caught.
 	go func() {
-		tcp.SetDeadline(time.Now().Add(pingTimeMax))
+		_ = tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			_ = conn.Close()
+		}()
 
 		_, _, dec, err := m.readStream(conn, "")
 		if err != nil {
@@ -378,7 +421,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		ack := ackResp{pingIn.SeqNo + 1, nil}
-		out, err := encode(ackRespMsg, &ack)
+		out, err := encode(ackRespMsg, &ack, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
 			return
@@ -393,7 +436,7 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "Sequence number") {
+	if err == nil || !strings.Contains(err.Error(), "sequence number") {
 		t.Fatalf("expected an error from mis-matched sequence number")
 	}
 	if didContact {
@@ -405,13 +448,15 @@ func TestTCPPing(t *testing.T) {
 
 	// Make sure an unexpected message type is handled gracefully.
 	go func() {
-		tcp.SetDeadline(time.Now().Add(pingTimeMax))
+		_ = tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			_ = conn.Close()
+		}()
 
 		_, _, _, err = m.readStream(conn, "")
 		if err != nil {
@@ -420,7 +465,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		bogus := indirectPingReq{}
-		out, err := encode(indirectPingMsg, &bogus)
+		out, err := encode(indirectPingMsg, &bogus, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode bogus msg: %s", err)
 			return
@@ -435,7 +480,7 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "Unexpected msgType") {
+	if err == nil || !strings.Contains(err.Error(), "unexpected msgType") {
 		t.Fatalf("expected an error from bogus message")
 	}
 	if didContact {
@@ -447,11 +492,11 @@ func TestTCPPing(t *testing.T) {
 
 	// Make sure failed I/O respects the deadline. In this case we try the
 	// common case of the receiving node being totally down.
-	tcp.Close()
+	_ = tcp.Close()
 	deadline = time.Now().Add(pingTimeout)
 	startPing := time.Now()
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
-	pingTime := time.Now().Sub(startPing)
+	pingTime := time.Since(startPing)
 	if err != nil {
 		t.Fatalf("expected no error during ping on closed socket, got: %s", err)
 	}
@@ -465,7 +510,11 @@ func TestTCPPing(t *testing.T) {
 
 func TestTCPPushPull(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	m.nodes = append(m.nodes, &nodeState{
 		Node: Node{
@@ -483,7 +532,9 @@ func TestTCPPushPull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	localNodes := make([]pushNodeState, 3)
 	localNodes[0].Name = "Test 0"
@@ -505,10 +556,12 @@ func TestTCPPushPull(t *testing.T) {
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
 	hd := codec.MsgpackHandle{}
+	hd.TimeNotBuiltin = !m.config.MsgpackUseNewTimeFormat
+
 	enc := codec.NewEncoder(conn, &hd)
 
 	// Send the push/pull indicator
-	conn.Write([]byte{byte(pushPullMsg)})
+	_, _ = conn.Write([]byte{byte(pushPullMsg)})
 
 	if err := enc.Encode(&header); err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -527,6 +580,8 @@ func TestTCPPushPull(t *testing.T) {
 
 	var bufConn io.Reader = conn
 	msghd := codec.MsgpackHandle{}
+	msghd.TimeNotBuiltin = !m.config.MsgpackUseNewTimeFormat
+
 	dec := codec.NewDecoder(bufConn, &msghd)
 
 	// Check if we have a compressed message
@@ -577,7 +632,7 @@ func TestTCPPushPull(t *testing.T) {
 	if n.Name != "Test 0" {
 		t.Fatalf("bad name")
 	}
-	if bytes.Compare(n.Addr, net.ParseIP(m.config.BindAddr)) != 0 {
+	if !bytes.Equal(n.Addr, net.ParseIP(m.config.BindAddr)) {
 		t.Fatal("bad addr")
 	}
 	if n.Incarnation != 0 {
@@ -590,7 +645,11 @@ func TestTCPPushPull(t *testing.T) {
 
 func TestSendMsg_Piggyback(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// Add a message to be broadcast
 	a := alive{
@@ -606,7 +665,11 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	m.encodeAndBroadcast("rand", aliveMsg, &a)
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udpAddr := udp.LocalAddr().(*net.UDPAddr)
 
@@ -617,7 +680,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -696,7 +759,11 @@ func TestEncryptDecryptState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	crypt, err := m.encryptLocalState(state, "")
 	if err != nil {
@@ -705,7 +772,9 @@ func TestEncryptDecryptState(t *testing.T) {
 
 	// Create reader, seek past the type byte
 	buf := bytes.NewReader(crypt)
-	buf.Seek(1, 0)
+	if _, err := buf.Seek(1, 0); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 
 	plain, err := m.decryptRemoteState(buf, "")
 	if err != nil {
@@ -722,10 +791,18 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := Address{
 		Addr: udp.LocalAddr().String(),
@@ -734,7 +811,9 @@ func TestRawSendUdp_CRC(t *testing.T) {
 
 	// Pass a nil node with no nodes registered, should result in no checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgPacket(a, nil, payload)
+	if err := m.rawSendMsgPacket(a, nil, payload); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
@@ -748,7 +827,9 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	}
 
 	// Pass a non-nil node with PMax >= 5, should result in a checksum
-	m.rawSendMsgPacket(a, &Node{PMax: 5}, payload)
+	if err := m.rawSendMsgPacket(a, &Node{PMax: 5}, payload); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -765,7 +846,9 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	m.nodeMap["127.0.0.1"] = &nodeState{
 		Node: Node{PMax: 5},
 	}
-	m.rawSendMsgPacket(a, nil, payload)
+	if err := m.rawSendMsgPacket(a, nil, payload); err != nil {
+		t.Fatal(err)
+	}
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -783,10 +866,18 @@ func TestIngestPacket_CRC(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := Address{
 		Addr: udp.LocalAddr().String(),
@@ -795,7 +886,9 @@ func TestIngestPacket_CRC(t *testing.T) {
 
 	// Get a message with a checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgPacket(a, &Node{PMax: 5}, payload)
+	if err := m.rawSendMsgPacket(a, &Node{PMax: 5}, payload); err != nil {
+		t.Fatal(err)
+	}
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
@@ -825,10 +918,18 @@ func TestIngestPacket_ExportedFunc_EmptyMessage(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.EnableCompression = false
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	udp := listenUDP(t)
-	defer udp.Close()
+	defer func() {
+		if err := udp.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	emptyConn := &emptyReadNetConn{}
 
@@ -864,7 +965,11 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 
 	m1, err := Create(c1)
 	require.NoError(t, err)
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -874,11 +979,15 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 
 	m2, err := Create(c2)
 	require.NoError(t, err)
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// Make sure we get this error on the joining side
 	_, err = m2.Join([]string{c1.Name + "/" + c1.BindAddr})
-	if err == nil || !strings.Contains(err.Error(), "No installed keys could decrypt the message") {
+	if err == nil || !strings.Contains(err.Error(), "no installed keys could decrypt the message") {
 		t.Fatalf("bad: %s", err)
 	}
 }
@@ -906,4 +1015,55 @@ func TestHandleCommand(t *testing.T) {
 	}
 	m.handleCommand(nil, nil, &net.TCPAddr{Port: 12345}, time.Now())
 	require.Contains(t, buf.String(), "missing message type byte")
+}
+
+func TestHandleConn_NilConnAfterRemoveLabelHeaderFromStream(t *testing.T) {
+	mockNet := &MockNetwork{}
+
+	t1 := mockNet.NewTransport("node1")
+
+	m := GetMemberlist(t, func(c *Config) {
+		c.Transport = t1
+	})
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	errConn := &errorReadNetConn{
+		closed: make(chan struct{}),
+	}
+	if err := t1.IngestStream(errConn); err != nil {
+		t.Fatal(err)
+	}
+
+	// The connection must be successfully closed
+	<-errConn.closed
+}
+
+type errorReadNetConn struct {
+	net.Conn
+	closed chan struct{}
+}
+
+func (c *errorReadNetConn) LocalAddr() net.Addr {
+	return &MockAddress{"fake:0", "fake"}
+}
+
+func (c *errorReadNetConn) RemoteAddr() net.Addr {
+	return &MockAddress{"fake:0", "fake"}
+}
+
+func (c *errorReadNetConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *errorReadNetConn) Read(b []byte) (n int, err error) {
+	return 0, fmt.Errorf("test read error")
+}
+
+func (c *errorReadNetConn) Close() error {
+	close(c.closed)
+	return nil
 }

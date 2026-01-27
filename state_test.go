@@ -1,3 +1,6 @@
+// Copyright IBM Corp. 2013, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -13,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/armon/go-metrics"
+	metrics "github.com/hashicorp/go-metrics/compat"
 	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -45,14 +48,22 @@ func TestMemberList_Probe(t *testing.T) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{
 		Node:        addr1.String(),
@@ -100,18 +111,30 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	m3 := HostMemberlist(addr3.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m3.Shutdown()
+	defer func() {
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: uint16(bindPort), Incarnation: 1, Vsn: m2.config.BuildVsnArray()}
@@ -165,7 +188,11 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 				c.SuspicionMult = 5
 				c.SuspicionMaxTimeoutMult = 2
 			})
-			defer m.Shutdown()
+			defer func() {
+				if err := m.Shutdown(); err != nil {
+					t.Fatal(err)
+				}
+			}()
 
 			bindPort := m.config.BindPort
 
@@ -180,8 +207,13 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 				peer := HostMemberlist(peerAddr.String(), t, func(c *Config) {
 					c.BindPort = bindPort
 				})
-				defer peer.Shutdown()
+				defer func() {
+					if err := peer.Shutdown(); err != nil {
+						t.Fatal(err)
+					}
+				}()
 
+				//nolint:staticcheck // reason: peers used later indirectly
 				peers = append(peers, peer)
 
 				a = alive{Node: peerAddr.String(), Addr: []byte(peerAddr), Port: uint16(bindPort), Incarnation: 1, Vsn: m.config.BuildVsnArray()}
@@ -565,7 +597,11 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 		c.ProbeInterval = 200 * time.Millisecond
 		probeTimeMin = 2*c.ProbeInterval - 50*time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -574,14 +610,22 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	m3 := HostMemberlist(addr3.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m3.Shutdown()
+	defer func() {
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -608,7 +652,7 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
 	m1.probeNode(n)
-	probeTime := time.Now().Sub(startProbe)
+	probeTime := time.Since(startProbe)
 
 	// Node should be reported suspect.
 	if n.State != StateSuspect {
@@ -647,7 +691,11 @@ func TestMemberList_ProbeNode_Wrong_VSN(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -656,14 +704,22 @@ func TestMemberList_ProbeNode_Wrong_VSN(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	m3 := HostMemberlist(addr3.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m3.Shutdown()
+	defer func() {
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -703,14 +759,22 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -754,7 +818,11 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 		c.ProbeInterval = 200 * time.Millisecond
 		probeTimeMax = c.ProbeInterval + 50*time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -763,7 +831,11 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -786,7 +858,7 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
 	m1.probeNode(n)
-	probeTime := time.Now().Sub(startProbe)
+	probeTime := time.Since(startProbe)
 
 	// Node should be reported suspect.
 
@@ -829,19 +901,31 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 		c.ProbeInterval = 200 * time.Millisecond
 		probeTimeMax = c.ProbeInterval + 20*time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	m3 := HostMemberlist(addr3.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m3.Shutdown()
+	defer func() {
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
@@ -863,7 +947,7 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
 	m1.probeNode(n)
-	probeTime := time.Now().Sub(startProbe)
+	probeTime := time.Since(startProbe)
 
 	// Node should be reported suspect.
 	if n.State != StateSuspect {
@@ -898,14 +982,22 @@ func TestMemberList_ProbeNode_Buddy(t *testing.T) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: uint16(bindPort), Incarnation: 1, Vsn: m2.config.BuildVsnArray()}
@@ -946,14 +1038,22 @@ func TestMemberList_ProbeNode(t *testing.T) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
@@ -984,14 +1084,22 @@ func TestMemberList_Ping(t *testing.T) {
 		c.ProbeTimeout = 1 * time.Second
 		c.ProbeInterval = 10 * time.Second
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
 	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.BindPort = bindPort
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
@@ -1008,7 +1116,7 @@ func TestMemberList_Ping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !(rtt > 0) {
+	if rtt <= 0 {
 		t.Fatalf("bad: %v", rtt)
 	}
 
@@ -1023,7 +1131,11 @@ func TestMemberList_ResetNodes(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.GossipToTheDeadTime = 100 * time.Millisecond
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a1, nil, false)
@@ -1137,7 +1249,7 @@ func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
 		if v.Complete != true {
 			t.Fatalf("Bad value")
 		}
-		if bytes.Compare(v.Payload, ack.Payload) != 0 {
+		if !bytes.Equal(v.Payload, ack.Payload) {
 			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
 
@@ -1189,7 +1301,7 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 		if v.Complete != true {
 			t.Fatalf("Bad value")
 		}
-		if bytes.Compare(v.Payload, ack.Payload) != 0 {
+		if !bytes.Equal(v.Payload, ack.Payload) {
 			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
 
@@ -1208,7 +1320,11 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = &ChannelEventDelegate{ch}
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1228,7 +1344,7 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	if state.State != StateAlive {
 		t.Fatalf("bad state")
 	}
-	if time.Now().Sub(state.StateChange) > time.Second {
+	if time.Since(state.StateChange) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 
@@ -1256,7 +1372,11 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = ted
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1282,7 +1402,7 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 		t.Fatalf("no update with new incarnation!")
 	}
 
-	if time.Now().Sub(state.StateChange) > time.Second {
+	if time.Since(state.StateChange) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 
@@ -1307,7 +1427,11 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = ted
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1396,7 +1520,11 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = ted
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{
 		Node:        "test",
@@ -1418,7 +1546,7 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 	m.aliveNode(&a, nil, false)
 
 	// Check updates
-	if bytes.Compare(state.Meta, a.Meta) != 0 {
+	if !bytes.Equal(state.Meta, a.Meta) {
 		t.Fatalf("meta did not update")
 	}
 
@@ -1431,7 +1559,7 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 		if !reflect.DeepEqual(*e.Node, state.Node) {
 			t.Fatalf("expected %v, got %v", *e.Node, state.Node)
 		}
-		if bytes.Compare(e.Node.Meta, a.Meta) != 0 {
+		if !bytes.Equal(e.Node.Meta, a.Meta) {
 			t.Fatalf("meta did not update")
 		}
 	default:
@@ -1442,7 +1570,11 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 
 func TestMemberList_AliveNode_Refute(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, true)
@@ -1484,7 +1616,11 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.DeadNodeReclaimTime = 10 * time.Millisecond
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	nodeName := "test"
 	a := alive{Node: nodeName, Addr: []byte{127, 0, 0, 1}, Port: 8000, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
@@ -1563,7 +1699,11 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 
 func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
@@ -1577,7 +1717,11 @@ func TestMemberList_SuspectNode(t *testing.T) {
 		c.ProbeInterval = time.Millisecond
 		c.SuspicionMult = 1
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1594,7 +1738,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	}
 
 	change := m.getNodeStateChange("test")
-	if time.Now().Sub(change) > time.Second {
+	if time.Since(change) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 
@@ -1616,7 +1760,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	}
 
 	newChange := m.getNodeStateChange("test")
-	if time.Now().Sub(newChange) > time.Second {
+	if time.Since(newChange) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 	if !newChange.After(change) {
@@ -1636,7 +1780,11 @@ func TestMemberList_SuspectNode(t *testing.T) {
 
 func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1652,7 +1800,7 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 	}
 
 	change := state.StateChange
-	if time.Now().Sub(change) > time.Second {
+	if time.Since(change) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 
@@ -1675,7 +1823,11 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 
 func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1701,7 +1853,11 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 
 func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, true)
@@ -1740,7 +1896,11 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 
 func TestMemberList_DeadNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	d := dead{Node: "test", Incarnation: 1}
 	m.deadNode(&d)
@@ -1755,7 +1915,11 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = &ChannelEventDelegate{ch}
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	nodeName := "node1"
 	s1 := alive{
@@ -1829,7 +1993,11 @@ func TestMemberList_DeadNode(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
 		c.Events = &ChannelEventDelegate{ch}
 	})
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1848,7 +2016,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 	}
 
 	change := state.StateChange
-	if time.Now().Sub(change) > time.Second {
+	if time.Since(change) > time.Second {
 		t.Fatalf("bad change delta")
 	}
 
@@ -1875,7 +2043,11 @@ func TestMemberList_DeadNode(t *testing.T) {
 func TestMemberList_DeadNode_Double(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1910,7 +2082,11 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 
 func TestMemberList_DeadNode_OldDead(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1928,7 +2104,11 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 
 func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, false)
@@ -1948,7 +2128,11 @@ func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
 
 func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a, nil, true)
@@ -1987,7 +2171,11 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 
 func TestMemberList_MergeState(t *testing.T) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
 	m.aliveNode(&a1, nil, false)
@@ -2086,7 +2274,11 @@ func TestMemberlist_Gossip(t *testing.T) {
 		// but slow enough to avoid "sendto: operation not permitted"
 		c.GossipInterval = 10 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -2097,11 +2289,19 @@ func TestMemberlist_Gossip(t *testing.T) {
 		// but slow enough to avoid "sendto: operation not permitted"
 		c.GossipInterval = 10 * time.Millisecond
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	m3 := HostMemberlist(addr2.String(), t, func(c *Config) {
 	})
-	defer m3.Shutdown()
+	defer func() {
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -2159,7 +2359,11 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 		c.GossipInterval = time.Millisecond
 		c.GossipToTheDeadTime = 100 * time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -2168,7 +2372,11 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 		c.Events = &ChannelEventDelegate{ch}
 	})
 
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -2247,7 +2455,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 		c.GossipInterval = 10 * time.Second
 		c.PushPullInterval = time.Millisecond
 	})
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	bindPort := m1.config.BindPort
 
@@ -2256,7 +2468,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 		c.GossipInterval = 10 * time.Second
 		c.Events = &ChannelEventDelegate{ch}
 	})
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -2374,7 +2590,11 @@ func TestVerifyProtocol(t *testing.T) {
 
 func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect bool) {
 	m := GetMemberlist(t, nil)
-	defer m.Shutdown()
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
 
 	m.nodes = make([]*nodeState, len(A))
 	for i, n := range A {
@@ -2410,7 +2630,9 @@ func registerInMemorySink(t *testing.T) *metrics.InmemSink {
 	sink := metrics.NewInmemSink(1*time.Minute, 1*time.Minute)
 	cfg := metrics.DefaultConfig("consul.usage.test")
 	cfg.EnableHostname = false
-	metrics.NewGlobal(cfg, sink)
+	if _, err := metrics.NewGlobal(cfg, sink); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 	return sink
 }
 
